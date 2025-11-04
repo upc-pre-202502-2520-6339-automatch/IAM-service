@@ -17,7 +17,7 @@ public class OpenApiConfiguration {
         // General configuration
         var openApi = new OpenAPI();
         openApi.info(new Info()
-                        .title("AutoMatch API")
+                        .title("IAM-SERVICE API")
                         .description("Identity & Access Management (IAM) and core endpoints.")
                         .version("v1.0.0")
                         .license(new License().name("Apache 2.0")
