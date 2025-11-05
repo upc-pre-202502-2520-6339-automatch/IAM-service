@@ -2,6 +2,8 @@ package com.iam.interfaces.rest;
 
 
 
+import com.iam.application.internal.commandservices.TokenRevocationCommandService;
+import com.iam.domain.model.commands.RevokeTokenCommand;
 import com.iam.infrastructure.tokens.jwt.BearerTokenService;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.servlet.http.HttpServletRequest;
@@ -38,10 +40,14 @@ import com.iam.interfaces.rest.transform.UserResourceFromEntityAssembler;
 public class AuthenticationController {
     private final UserCommandService userCommandService;
     private final BearerTokenService bearerTokenService;
+    private final TokenRevocationCommandService tokenRevocationCommandService;
 
-    public AuthenticationController(UserCommandService userCommandService, BearerTokenService bearerTokenService) {
+
+
+    public AuthenticationController(UserCommandService userCommandService, BearerTokenService bearerTokenService, TokenRevocationCommandService tokenRevocationCommandService) {
         this.userCommandService = userCommandService;
         this.bearerTokenService = bearerTokenService;
+        this.tokenRevocationCommandService = tokenRevocationCommandService;
     }
 
     /**
@@ -91,4 +97,30 @@ public class AuthenticationController {
                 .toResourceFromEntity(refreshed.get().getLeft(), refreshed.get().getRight());
         return ResponseEntity.ok(res);
     }
+
+    /** Refresh: usa el token actual si no está revocado y no expiró */
+    @PostMapping("/refresh")
+    public ResponseEntity<AuthenticatedUserResource> refresh(HttpServletRequest request) {
+        String token = bearerTokenService.getBearerTokenFrom(request);
+        if (token == null) return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
+
+        var refreshed = userCommandService.handle(new RefreshTokenCommand(token));
+        if (refreshed.isEmpty()) return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
+
+        var res = AuthenticatedUserResourceFromEntityAssembler
+                .toResourceFromEntity(refreshed.get().getLeft(), refreshed.get().getRight());
+        return ResponseEntity.ok(res);
+    }
+
+    /** Logout real: revoca el token vigente */
+    @PostMapping("/logout")
+    public ResponseEntity<Void> logout(HttpServletRequest request) {
+        String token = bearerTokenService.getBearerTokenFrom(request);
+        if (token == null) return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
+
+        tokenRevocationCommandService.handle(new RevokeTokenCommand(token));
+        return ResponseEntity.noContent().build();
+    }
+
+
 }

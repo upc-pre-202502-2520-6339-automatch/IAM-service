@@ -15,7 +15,9 @@ import com.iam.infrastructure.tokens.jwt.BearerTokenService;
 
 import javax.crypto.SecretKey;
 import java.nio.charset.StandardCharsets;
+import java.time.Instant;
 import java.util.Date;
+import java.util.UUID;
 import java.util.function.Function;
 
 @Service
@@ -43,6 +45,18 @@ public class TokenServiceImpl implements BearerTokenService {
     public String generateToken(Authentication authentication) {
         return buildTokenWithDefaultParameters(authentication.getName());
     }
+
+    @Override
+    public String getJti(String token) {
+        return extractAllClaims(token).getId();
+    }
+
+
+    @Override
+    public Instant getExpiration(String token) {
+        return extractAllClaims(token).getExpiration().toInstant();
+    }
+
 
     @Override
     public String generateToken(String username) {
@@ -74,6 +88,12 @@ public class TokenServiceImpl implements BearerTokenService {
         return false;
     }
 
+
+
+
+
+
+
     // private methods
 
     private SecretKey getSigningKey() {
@@ -86,12 +106,15 @@ public class TokenServiceImpl implements BearerTokenService {
         var expiration = DateUtils.addDays(issuedAt, expirationDays);
         var key = getSigningKey();
         return Jwts.builder()
+                .id(UUID.randomUUID().toString())
                 .subject(username)
                 .issuedAt(issuedAt)
                 .expiration(expiration)
                 .signWith(key)
                 .compact();
     }
+
+
 
     private Claims extractAllClaims(String token) {
         return Jwts.parser().verifyWith(getSigningKey()).build().parseSignedClaims(token).getPayload();
