@@ -2,6 +2,7 @@ package com.iam.application.internal.commandservices;
 
 
 
+import org.springframework.transaction.annotation.Transactional;
 import org.apache.commons.lang3.tuple.ImmutablePair;
 import org.springframework.stereotype.Service;
 import com.iam.application.internal.outboundservices.hashing.HashingService;
@@ -19,6 +20,7 @@ import java.util.List;
 import java.util.Optional;
 
 @Service
+@Transactional
 public class UserCommandServiceImpl implements UserCommandService {
     private final UserRepository userRepository;
     private final HashingService hashingService;

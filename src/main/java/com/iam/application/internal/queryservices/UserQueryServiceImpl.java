@@ -1,7 +1,7 @@
 package com.iam.application.internal.queryservices;
 
 
-
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.stereotype.Service;
 import com.iam.domain.model.aggregates.User;
 import com.iam.domain.model.queries.GetAllUsersQuery;
@@ -14,6 +14,7 @@ import java.util.List;
 import java.util.Optional;
 
 @Service
+@Transactional(readOnly = true)
 public class UserQueryServiceImpl implements UserQueryService {
     private final UserRepository userRepository;
 

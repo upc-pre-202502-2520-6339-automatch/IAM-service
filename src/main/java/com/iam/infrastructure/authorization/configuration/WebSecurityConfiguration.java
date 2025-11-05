@@ -1,4 +1,4 @@
-package com.iam.infrastructure.authorization.Configuration;
+package com.iam.infrastructure.authorization.configuration;
 
 
 import org.springframework.beans.factory.annotation.Qualifier;
@@ -77,7 +77,8 @@ public class WebSecurityConfiguration {
                                 "/v3/api-docs/**",
                                 "/swagger-ui.html",
                                 "/swagger-ui/**",
-                                "/docs"
+                                "/docs",
+                                "/actuator/health"
                         ).permitAll()
                         .anyRequest().authenticated()
                 );

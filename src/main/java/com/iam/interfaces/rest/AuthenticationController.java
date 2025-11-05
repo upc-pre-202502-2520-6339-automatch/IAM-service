@@ -2,7 +2,10 @@ package com.iam.interfaces.rest;
 
 
 
+import com.iam.infrastructure.tokens.jwt.BearerTokenService;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import jakarta.servlet.http.HttpServletRequest;
+import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
@@ -34,27 +37,31 @@ import com.iam.interfaces.rest.transform.UserResourceFromEntityAssembler;
 @Tag(name = "Authentication", description = "Authentication Endpoints")
 public class AuthenticationController {
     private final UserCommandService userCommandService;
+    private final BearerTokenService bearerTokenService;
 
-    public AuthenticationController(UserCommandService userCommandService) {
+    public AuthenticationController(UserCommandService userCommandService, BearerTokenService bearerTokenService) {
         this.userCommandService = userCommandService;
+        this.bearerTokenService = bearerTokenService;
     }
 
     /**
      * Handles the sign-in request.
      *
-     * @param signInResource the sign-in request body.
+     * @param body the sign-in request body.
      * @return the authenticated user resource.
      */
     @PostMapping("/sign-in")
-    public ResponseEntity<AuthenticatedUserResource> signIn(@RequestBody SignInResource signInResource) {
-        var signInCommand = SignInCommandFromResourceAssembler.toCommandFromResource(signInResource);
-        var authenticatedUser = userCommandService.handle(signInCommand);
-        if (authenticatedUser.isEmpty()) {
-            return ResponseEntity.notFound().build();
+    public ResponseEntity<AuthenticatedUserResource> signIn(@RequestBody @Valid SignInResource body) {
+        var cmd = SignInCommandFromResourceAssembler.toCommandFromResource(body);
+        var result = userCommandService.handle(cmd);
+        if (result.isEmpty()) {
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
         }
-        var authenticatedUserResource = AuthenticatedUserResourceFromEntityAssembler.toResourceFromEntity(authenticatedUser.get().getLeft(), authenticatedUser.get().getRight());
-        return ResponseEntity.ok(authenticatedUserResource);
+        var res = AuthenticatedUserResourceFromEntityAssembler
+                .toResourceFromEntity(result.get().getLeft(), result.get().getRight());
+        return ResponseEntity.ok(res);
     }
+
 
     /**
      * Handles the sign-up request.
@@ -63,7 +70,7 @@ public class AuthenticationController {
      * @return the created user resource.
      */
     @PostMapping("/sign-up")
-    public ResponseEntity<UserResource> signUp(@RequestBody SignUpResource signUpResource) {
+    public ResponseEntity<UserResource> signUp(@RequestBody @Valid SignUpResource signUpResource) {
         var signUpCommand = SignUpCommandFromResourceAssembler.toCommandFromResource(signUpResource);
         var user = userCommandService.handle(signUpCommand);
         if (user.isEmpty()) {
@@ -74,14 +81,14 @@ public class AuthenticationController {
 
     }
 
-    @PostMapping("/verify-token/{token}")
-    public ResponseEntity<AuthenticatedUserResource> verifyToken(@PathVariable String token) {
-        var refreshTokenCommand = new RefreshTokenCommand(token);
-        var authenticatedUser = userCommandService.handle(refreshTokenCommand);
-        if (authenticatedUser.isEmpty()) {
-            return ResponseEntity.notFound().build();
-        }
-        var authenticatedUserResource = AuthenticatedUserResourceFromEntityAssembler.toResourceFromEntity(authenticatedUser.get().getLeft(), authenticatedUser.get().getRight());
-        return ResponseEntity.ok(authenticatedUserResource);
+    @PostMapping("/verify-token")
+    public ResponseEntity<AuthenticatedUserResource> verifyTokenHeader(HttpServletRequest request) {
+        String token = bearerTokenService.getBearerTokenFrom(request);
+        if (token == null) return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
+        var refreshed = userCommandService.handle(new RefreshTokenCommand(token));
+        if (refreshed.isEmpty()) return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
+        var res = AuthenticatedUserResourceFromEntityAssembler
+                .toResourceFromEntity(refreshed.get().getLeft(), refreshed.get().getRight());
+        return ResponseEntity.ok(res);
     }
 }
