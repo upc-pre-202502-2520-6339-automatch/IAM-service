@@ -25,7 +25,7 @@ import java.util.List;
  * - GET /api/v1/users/{userId}: returns the user with the given id
  **/
 @RestController
-@RequestMapping(value = "/api/v1/authentication/users", produces = MediaType.APPLICATION_JSON_VALUE)
+@RequestMapping(value = "/api/v1/users", produces = MediaType.APPLICATION_JSON_VALUE)
 @Tag(name = "Users", description = "User Management Endpoints")
 public class UsersController {
     private final UserQueryService userQueryService;
