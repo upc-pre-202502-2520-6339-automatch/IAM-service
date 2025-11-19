@@ -3,6 +3,8 @@ package com.iam.application.internal.commandservices;
 
 
 import com.iam.domain.exceptions.ResourceNotFoundException;
+import com.iam.infrastructure.messaging.UserEventsProducer;
+import com.iam.infrastructure.messaging.events.UserRegisteredEvent;
 import org.springframework.security.authentication.BadCredentialsException;
 import org.springframework.transaction.annotation.Transactional;
 import org.apache.commons.lang3.tuple.ImmutablePair;
@@ -29,50 +31,72 @@ public class UserCommandServiceImpl implements UserCommandService {
     private final HashingService hashingService;
     private final TokenService tokenService;
     private final RoleRepository roleRepository;
+    private final UserEventsProducer userEventsProducer;
 
-    public UserCommandServiceImpl(UserRepository userRepository, HashingService hashingService, TokenService tokenService, RoleRepository roleRepository) {
+
+
+
+    public UserCommandServiceImpl(UserRepository userRepository, HashingService hashingService, TokenService tokenService, RoleRepository roleRepository, UserEventsProducer userEventsProducer) {
         this.userRepository = userRepository;
         this.hashingService = hashingService;
         this.tokenService = tokenService;
         this.roleRepository = roleRepository;
+        this.userEventsProducer = userEventsProducer;
     }
 
     @Override
     public Optional<User> handle(SignUpCommand command) {
-        // 409 CONFLICT si el username ya existe
         if (userRepository.existsByUsername(command.username()))
             throw new IllegalStateException("Username already exists");
 
-        // Resuelve roles solicitados o usa el rol por defecto
         var roles = resolveRoles(command.roles());
-
         var user = new User(command.username(), hashingService.encode(command.password()), roles);
         userRepository.save(user);
-        return userRepository.findByUsername(command.username());
-    }
 
+        var saved = userRepository.findByUsername(command.username());
+
+        // 👉 Emitimos evento
+        saved.ifPresent(u -> {
+            var event = new UserRegisteredEvent(
+                    u.getId(),
+                    u.getUsername(),
+                    u.getSerializedRoles()
+            );
+            userEventsProducer.publishUserRegistered(event);
+        });
+
+        return saved;
+    }
 
     @Override
     public Optional<ImmutablePair<User, String>> handle(SignInCommand command) {
         var user = userRepository.findByUsername(command.username())
-                .orElseThrow(() -> new ResourceNotFoundException("User not found")); // 404
+                .orElseThrow(() -> new ResourceNotFoundException("User not found"));
 
         if (!hashingService.matches(command.password(), user.getPassword()))
-            throw new BadCredentialsException("Invalid credentials"); // 401
+            throw new BadCredentialsException("Invalid credentials");
 
-        var token = tokenService.generateToken(user.getUsername());
+        // 👉 Ahora metemos id + roles en el token
+        var token = tokenService.generateToken(
+                user.getUsername(),
+                user.getId(),
+                user.getSerializedRoles()      // List<String> ["SELLER", "BUYER"...]
+        );
         return Optional.of(ImmutablePair.of(user, token));
     }
-
 
 
     @Override
     public Optional<ImmutablePair<User, String>> handle(RefreshTokenCommand command) {
         var username = tokenService.getUsernameFromToken(command.token());
         var user = userRepository.findByUsername(username)
-                .orElseThrow(() -> new ResourceNotFoundException("User not found")); // 404
+                .orElseThrow(() -> new ResourceNotFoundException("User not found"));
 
-        var token = tokenService.generateToken(user.getUsername());
+        var token = tokenService.generateToken(
+                user.getUsername(),
+                user.getId(),
+                user.getSerializedRoles()
+        );
         return Optional.of(ImmutablePair.of(user, token));
     }
 
@@ -94,6 +118,9 @@ public class UserCommandServiceImpl implements UserCommandService {
         }
         return result;
     }
+
+
+
 
 
 }

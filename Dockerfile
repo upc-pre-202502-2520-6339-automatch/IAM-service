@@ -1,17 +1,12 @@
-FROM gradle:8.10.2-jdk21 AS build
+FROM maven:3.9.9-eclipse-temurin-17 AS build
 WORKDIR /app
-COPY build.gradle settings.gradle gradle.properties ./
-COPY gradle ./gradle
-RUN gradle --no-daemon dependencies
-
+COPY pom.xml .
+RUN mvn -q -DskipTests dependency:go-offline
 COPY src ./src
-RUN gradle --no-daemon clean bootJar
+RUN mvn -q -DskipTests clean package
 
-FROM eclipse-temurin:21-jre-alpine
-ENV TZ=America/Lima JAVA_OPTS=""
-RUN addgroup -S app && adduser -S app -G app
-USER app
+FROM eclipse-temurin:17-jre
 WORKDIR /app
-COPY --from=build /app/build/libs/*.jar app.jar
-EXPOSE 8080
-ENTRYPOINT ["sh","-c","java $JAVA_OPTS -jar /app/app.jar"]
+COPY --from=build /app/target/*.jar app.jar
+EXPOSE 8094
+ENTRYPOINT ["java","-jar","/app/app.jar"]

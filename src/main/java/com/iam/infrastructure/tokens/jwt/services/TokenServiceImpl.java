@@ -41,9 +41,22 @@ public class TokenServiceImpl implements BearerTokenService {
         return null;
     }
 
+    // 🔹 Cuando Spring te pase un Authentication (si lo usas)
     @Override
     public String generateToken(Authentication authentication) {
-        return buildTokenWithDefaultParameters(authentication.getName());
+        return buildToken(authentication.getName(), null, null);
+    }
+
+    // 🔹 Versión legacy: solo username
+    @Override
+    public String generateToken(String username) {
+        return buildToken(username, null, null);
+    }
+
+    // 🔹 🔥 Nueva sobrecarga con userId + roles
+    @Override
+    public String generateToken(String username, Long userId, java.util.List<String> roles) {
+        return buildToken(username, userId, roles);
     }
 
     @Override
@@ -51,16 +64,40 @@ public class TokenServiceImpl implements BearerTokenService {
         return extractAllClaims(token).getId();
     }
 
-
     @Override
     public Instant getExpiration(String token) {
         return extractAllClaims(token).getExpiration().toInstant();
     }
 
+    // =========================
+    //   BUILDER CENTRAL
+    // =========================
+    private String buildToken(String username, Long userId, java.util.List<String> roles) {
+        var issuedAt = new Date();
+        var expiration = DateUtils.addDays(issuedAt, expirationDays);
+        var key = getSigningKey();
 
-    @Override
-    public String generateToken(String username) {
-        return buildTokenWithDefaultParameters(username);
+        var builder = Jwts.builder()
+                .header()
+                .add("typ", "JWT")
+                .add("alg", "HS384")   // 👈 match con Profiles
+                .and()
+                .id(UUID.randomUUID().toString())
+                .subject(username)
+                .issuedAt(issuedAt)
+                .expiration(expiration);
+
+        // 👇 Claims que Profiles espera
+        if (userId != null) {
+            builder.claim("user_id", userId);
+        }
+        if (roles != null && !roles.isEmpty()) {
+            builder.claim("roles", roles); // ["SELLER","BUYER",...]
+        }
+
+        return builder
+                .signWith(key, Jwts.SIG.HS384)
+                .compact();
     }
 
     @Override
@@ -90,30 +127,12 @@ public class TokenServiceImpl implements BearerTokenService {
 
 
 
-
-
-
-
     // private methods
 
     private SecretKey getSigningKey() {
         byte[] keyBytes = secret.getBytes(StandardCharsets.UTF_8);
         return Keys.hmacShaKeyFor(keyBytes);
     }
-
-    private String buildTokenWithDefaultParameters(String username) {
-        var issuedAt = new Date();
-        var expiration = DateUtils.addDays(issuedAt, expirationDays);
-        var key = getSigningKey();
-        return Jwts.builder()
-                .id(UUID.randomUUID().toString())
-                .subject(username)
-                .issuedAt(issuedAt)
-                .expiration(expiration)
-                .signWith(key)
-                .compact();
-    }
-
 
 
     private Claims extractAllClaims(String token) {

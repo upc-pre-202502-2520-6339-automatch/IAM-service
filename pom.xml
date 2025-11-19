@@ -74,6 +74,12 @@
         </dependency>
 
 
+        <!-- Kafka -->
+
+        <dependency>
+            <groupId>org.springframework.kafka</groupId>
+            <artifactId>spring-kafka</artifactId>
+        </dependency>
 
         <!-- puedes omitir jakarta.validation-api: ya viene transitiva -->
         <dependency>
